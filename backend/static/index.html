@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Continental - Downloader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #000000; color: #ffffff; }
+        .glass { background: rgba(18, 18, 18, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .toast { transition: opacity 0.3s ease-in-out; }
+        body.high-contrast { background-color: #000; color: #fff; }
+        body.high-contrast .glass { background: #000; border: 2px solid #fff; box-shadow: none; }
+        body.high-contrast input, body.high-contrast select, body.high-contrast textarea { background: #000; border: 1px solid #fff; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+    <div id="toast" class="toast opacity-0 fixed top-4 right-4 bg-gray-800 border border-gray-700 text-white px-4 py-3 rounded shadow-lg z-50 pointer-events-none">
+        <span id="toastMsg">Notification</span>
+    </div>
+
+    <div class="glass p-8 rounded-2xl shadow-2xl w-full max-w-lg">
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-100">Universal Downloader</h1>
+            <button onclick="toggleTheme()" class="text-xs text-gray-400 hover:text-white transition-colors border border-gray-700 px-2 py-1 rounded">
+                Toggle Contrast
+            </button>
+        </div>
+        
+        <div class="mb-4">
+            <label class="block text-gray-400 text-sm mb-2">Download Directory</label>
+            <input type="text" id="dirInput" placeholder="/app/downloads" class="w-full bg-[#121212] border border-gray-700 text-white rounded-lg p-3 outline-none focus:border-blue-500 transition-colors">
+        </div>
+
+        <div class="flex flex-col gap-4">
+            <textarea id="urlInput" rows="3" placeholder="Enter URLs (one per line)..." class="w-full bg-[#121212] border border-gray-700 text-white rounded-lg p-3 outline-none focus:border-blue-500 transition-colors resize-none"></textarea>
+            
+            <button onclick="fetchFormats()" id="btnFetch" class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+                Fetch Formats (1st URL)
+            </button>
+
+            <select id="formatInput" class="w-full bg-[#121212] border border-gray-700 text-white rounded-lg p-3 outline-none focus:border-blue-500 transition-colors">
+                <option value="bestvideo+bestaudio/best">Best Quality (Default)</option>
+                <option value="bestaudio/best">Audio Only</option>
+            </select>
+            
+            <button onclick="startDownload()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors shadow-lg shadow-blue-500/30 mt-2">
+                Initiate Sequence
+            </button>
+        </div>
+        
+        <div id="progressContainer" class="mt-8 hidden">
+            <div class="flex justify-between items-center mb-2">
+                <div class="flex justify-between text-sm text-gray-400 w-full min-w-0 pr-4">
+                    <span id="filename" class="truncate max-w-[60%]">Preparing...</span>
+                    <span id="percent">0%</span>
+                </div>
+                <button onclick="cancelActiveDownload()" id="btnCancel" class="bg-red-600 hover:bg-red-700 text-white text-xs py-1 px-3 rounded whitespace-nowrap transition-colors">
+                    Cancel
+                </button>
+            </div>
+            <div class="w-full bg-gray-800 rounded-full h-2 mb-2">
+                <div id="progressBar" class="bg-blue-500 h-2 rounded-full transition-all duration-300 ease-out" style="width: 0%"></div>
+            </div>
+            <div class="flex justify-between text-xs text-gray-500 mt-2">
+                <span id="speed">0 MB/s</span>
+                <span id="eta">ETA: -</span>
+            </div>
+        </div>
+        <div id="historyContainer" class="mt-8 border-t border-gray-800 pt-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-gray-200">Download History</h2>
+                <button onclick="fetchHistory()" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 py-1 px-3 rounded transition-colors">
+                    Refresh
+                </button>
+            </div>
+            <div id="historyList" class="flex flex-col gap-3 max-h-64 overflow-y-auto pr-2">
+                <p class="text-sm text-gray-500">No recent downloads.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const ws = new WebSocket(`ws://${window.location.host}/ws`);
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const percentText = document.getElementById('percent');
+        const speedText = document.getElementById('speed');
+        const etaText = document.getElementById('eta');
+        const filenameText = document.getElementById('filename');
+        const formatInput = document.getElementById('formatInput');
+        const dirInput = document.getElementById('dirInput');
+
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            progressContainer.classList.remove('hidden');
+            
+            if (data.type === 'progress') {
+                filenameText.innerText = data.filename.split('/').pop() || data.filename;
+                percentText.innerText = data.percent;
+                speedText.innerText = data.speed;
+                etaText.innerText = `ETA: ${data.eta}`;
+                
+                let percentStr = data.percent.replace(/\x1b\[.*?m/g, '').replace('%', '').trim();
+                let pct = parseFloat(percentStr);
+                if(!isNaN(pct)) {
+                    progressBar.style.width = `${pct}%`;
+                }
+            } else if (data.type === 'finished') {
+                showToast(`Finished downloading: ${data.filename.split('/').pop()}`);
+                percentText.innerText = "100%";
+                progressBar.style.width = "100%";
+                speedText.innerText = "Done";
+                etaText.innerText = "";
+                setTimeout(fetchHistory, 1000); // refresh history a moment after finish
+            } else if (data.type === 'error') {
+                showToast(`Error: ${data.message}`);
+                console.error(data.url, data.message);
+                setTimeout(fetchHistory, 1000);
+            }
+        };
+
+        // Theme management
+        const body = document.body;
+        function applyTheme(isHighContrast) {
+            if(isHighContrast) {
+                body.classList.add('high-contrast');
+            } else {
+                body.classList.remove('high-contrast');
+            }
+        }
+        function toggleTheme() {
+            const isHighContrast = !body.classList.contains('high-contrast');
+            localStorage.setItem('highContrast', isHighContrast);
+            applyTheme(isHighContrast);
+        }
+        applyTheme(localStorage.getItem('highContrast') === 'true');
+        
+        // Load settings on boot
+        fetch('/settings/')
+            .then(res => res.json())
+            .then(data => {
+                if(data.preferred_download_directory) {
+                    dirInput.value = data.preferred_download_directory;
+                }
+            });
+
+        // Save settings on blur
+        dirInput.addEventListener('blur', () => {
+            fetch('/settings/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ preferred_download_directory: dirInput.value })
+            });
+        });
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMsg').innerText = msg;
+            toast.classList.remove('opacity-0');
+            setTimeout(() => {
+                toast.classList.add('opacity-0');
+            }, 3000);
+        }
+
+        async function fetchFormats() {
+            const urlsStr = document.getElementById('urlInput').value.trim();
+            if (!urlsStr) return;
+            const firstUrl = urlsStr.split('\n')[0].trim();
+            if (!firstUrl) return;
+            
+            const btn = document.getElementById('btnFetch');
+            btn.innerText = "Fetching...";
+            btn.disabled = true;
+            
+            try {
+                const res = await fetch('/formats/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: firstUrl })
+                });
+                const data = await res.json();
+                
+                if (data.formats) {
+                    formatInput.innerHTML = '';
+                    data.formats.forEach(f => {
+                        const opt = document.createElement('option');
+                        opt.value = f.format_id;
+                        opt.innerText = f.label;
+                        formatInput.appendChild(opt);
+                    });
+                    showToast(`Formats fetched for: ${data.title}`);
+                } else if (data.error) {
+                    showToast("Failed to fetch formats.");
+                }
+            } catch (e) {
+                console.error(e);
+                showToast("Error fetching formats.");
+            }
+            
+            btn.innerText = "Fetch Formats (1st URL)";
+            btn.disabled = false;
+        }
+
+        let currentDownloadUrl = null;
+
+        async function fetchHistory() {
+            try {
+                const res = await fetch('/history/');
+                const history = await res.json();
+                const list = document.getElementById('historyList');
+                if (history && history.length > 0) {
+                    list.innerHTML = '';
+                    history.forEach(item => {
+                        const date = new Date(item.timestamp * 1000).toLocaleString();
+                        const colorClass = item.status === 'Completed' ? 'text-green-400' : (item.status === 'Started' ? 'text-blue-400' : 'text-red-400');
+                        list.innerHTML += `
+                            <div class="bg-gray-800 p-3 rounded-lg text-sm border border-gray-700">
+                                <div class="font-bold text-gray-200 truncate">${item.title}</div>
+                                <div class="flex justify-between mt-1 text-xs">
+                                    <span class="${colorClass}">${item.status}</span>
+                                    <span class="text-gray-500">${date}</span>
+                                </div>
+                            </div>
+                        `;
+                    });
+                } else {
+                    list.innerHTML = '<p class="text-sm text-gray-500">No recent downloads.</p>';
+                }
+            } catch (e) {}
+        }
+        
+        async function cancelActiveDownload() {
+            if (!currentDownloadUrl) return;
+            try {
+                const res = await fetch('/cancel/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: currentDownloadUrl })
+                });
+                if (res.ok) {
+                    showToast("Cancel signal sent.");
+                }
+            } catch (e) {
+                showToast("Failed to send cancel signal.");
+            }
+        }
+
+        async function startDownload() {
+            const urlsStr = document.getElementById('urlInput').value.trim();
+            const format = formatInput.value;
+            if (!urlsStr) return;
+            
+            const urls = urlsStr.split('\n').map(u => u.trim()).filter(u => u);
+            if (urls.length === 0) return;
+            
+            currentDownloadUrl = urls[0]; // Tracking first for cancel demo
+
+            try {
+                const res = await fetch('/download/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ urls: urls, format: format })
+                });
+                
+                if (res.ok) {
+                    showToast("Download sequence initiated.");
+                    // Reset UI
+                    document.getElementById('urlInput').value = '';
+                    progressContainer.classList.add('hidden');
+                    progressBar.style.width = '0%';
+                    percentText.innerText = '0%';
+                    fetchHistory();
+                } else {
+                    showToast("Failed to start download.");
+                }
+            } catch (e) {
+                console.error("Error starting download:", e);
+                showToast("Error initiating download sequence.");
+            }
+        }
+
+        // Call on load
+        fetchHistory();
+    </script>
+</body>
+</html>
