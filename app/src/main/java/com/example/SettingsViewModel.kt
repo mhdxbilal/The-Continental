@@ -17,7 +17,7 @@ class SettingsViewModel(
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = UserSettings(-1.0f, 50, 0, false, 0, false)
+            initialValue = UserSettings(-1.0f, 50, 0, false, 0, false, "", "")
         )
 
     fun updateBrightness(value: Float) {

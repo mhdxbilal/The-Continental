@@ -17,7 +17,9 @@ data class UserSettings(
     val orientation: Int,
     val isGridMode: Boolean,
     val sortOrder: Int, // 0: Name, 1: Size, 2: Duration
-    val deepProcessingMode: Boolean
+    val deepProcessingMode: Boolean,
+    val vaultPin: String, // Secure Private PIN
+    val vaultEmail: String // PIN recovery backup email
 )
 
 class UserPreferencesRepository(private val dataStore: DataStore<Preferences>) {
@@ -28,6 +30,8 @@ class UserPreferencesRepository(private val dataStore: DataStore<Preferences>) {
         val IS_GRID_MODE = booleanPreferencesKey("is_grid_mode")
         val SORT_ORDER = intPreferencesKey("sort_order")
         val DEEP_PROCESSING_MODE = booleanPreferencesKey("deep_processing_mode")
+        val VAULT_PIN = stringPreferencesKey("vault_pin")
+        val VAULT_EMAIL = stringPreferencesKey("vault_email")
     }
 
     val userSettingsFlow: Flow<UserSettings> = dataStore.data
@@ -45,7 +49,9 @@ class UserPreferencesRepository(private val dataStore: DataStore<Preferences>) {
             val isGridMode = preferences[Keys.IS_GRID_MODE] ?: false
             val sortOrder = preferences[Keys.SORT_ORDER] ?: 0
             val deepProcessingMode = preferences[Keys.DEEP_PROCESSING_MODE] ?: false
-            UserSettings(brightness, volume, orientation, isGridMode, sortOrder, deepProcessingMode)
+            val vaultPin = preferences[Keys.VAULT_PIN] ?: ""
+            val vaultEmail = preferences[Keys.VAULT_EMAIL] ?: ""
+            UserSettings(brightness, volume, orientation, isGridMode, sortOrder, deepProcessingMode, vaultPin, vaultEmail)
         }
 
     suspend fun updateBrightness(brightness: Float) {
@@ -81,6 +87,18 @@ class UserPreferencesRepository(private val dataStore: DataStore<Preferences>) {
     suspend fun updateDeepProcessingMode(enabled: Boolean) {
         dataStore.edit { preferences ->
             preferences[Keys.DEEP_PROCESSING_MODE] = enabled
+        }
+    }
+
+    suspend fun updateVaultPin(pin: String) {
+        dataStore.edit { preferences ->
+            preferences[Keys.VAULT_PIN] = pin
+        }
+    }
+
+    suspend fun updateVaultEmail(email: String) {
+        dataStore.edit { preferences ->
+            preferences[Keys.VAULT_EMAIL] = email
         }
     }
 }

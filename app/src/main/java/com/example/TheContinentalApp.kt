@@ -22,7 +22,7 @@ class TheContinentalApp : Application(), SingletonImageLoader.Factory {
             applicationContext,
             MediaDatabase::class.java,
             "media_database"
-        ).build()
+        ).fallbackToDestructiveMigration().build()
         userPreferencesRepository = UserPreferencesRepository(dataStore)
     }
 
