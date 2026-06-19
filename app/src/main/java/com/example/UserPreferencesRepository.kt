@@ -50,7 +50,7 @@ data class UserSettings(
     val fileAccessMode: String = "MediaStore (Recommended/Default)",
     val tunneledPlayback: Boolean = false,
 
-    val downloaderBackendUrl: String = "http://10.0.2.2:8000",
+    val downloaderBackendUrl: String = "https://ais-dev-4ub3z5bplmj54bn63efdsl-236905366543.asia-southeast1.run.app",
     val autoStartDownloader: Boolean = true,
     val downloadSimultaneously: Int = 3,
     val downloadOverWifiOnly: Boolean = false,
@@ -169,7 +169,7 @@ class UserPreferencesRepository(private val dataStore: DataStore<Preferences>) {
                 fileAccessMode = preferences[Keys.FILE_ACCESS_MODE] ?: "MediaStore (Recommended/Default)",
                 tunneledPlayback = preferences[Keys.TUNNELED_PLAYBACK] ?: false,
 
-                downloaderBackendUrl = preferences[Keys.DOWNLOADER_BACKEND_URL] ?: "http://10.0.2.2:8000",
+                downloaderBackendUrl = preferences[Keys.DOWNLOADER_BACKEND_URL] ?: "https://ais-dev-4ub3z5bplmj54bn63efdsl-236905366543.asia-southeast1.run.app",
                 autoStartDownloader = preferences[Keys.AUTO_START_DOWNLOADER] ?: true,
                 downloadSimultaneously = preferences[Keys.DOWNLOAD_SIMULTANEOUSLY] ?: 3,
                 downloadOverWifiOnly = preferences[Keys.DOWNLOAD_OVER_WIFI_ONLY] ?: false,
