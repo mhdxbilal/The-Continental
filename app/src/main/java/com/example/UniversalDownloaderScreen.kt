@@ -153,6 +153,9 @@ fun UniversalDownloaderScreen(viewModel: MainViewModel, onMediaClick: (MediaEnti
                 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                var customLocation by remember { mutableStateOf("/storage/emulated/0/Download") }
+                var useInternalMemory by remember { mutableStateOf(true) }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -161,17 +164,27 @@ fun UniversalDownloaderScreen(viewModel: MainViewModel, onMediaClick: (MediaEnti
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Box(
                             modifier = Modifier
-                                .border(1.dp, Color(0xFF00FFCC), RoundedCornerShape(20.dp))
+                                .border(1.dp, if (useInternalMemory) Color(0xFF00FFCC) else Color(0xFF1E2A2E), RoundedCornerShape(20.dp))
+                                .background(if (useInternalMemory) Color(0xFF00FFCC).copy(alpha=0.1f) else Color.Transparent)
+                                .clickable { 
+                                    useInternalMemory = true
+                                    customLocation = "/storage/emulated/0/Download"
+                                }
                                 .padding(horizontal = 16.dp, vertical = 8.dp)
                         ) {
-                            Text("Internal Memory", color = Color.Gray, fontSize = 11.sp)
+                            Text("Internal Memory", color = if (useInternalMemory) Color(0xFF00FFCC) else Color.Gray, fontSize = 11.sp)
                         }
                         Box(
                             modifier = Modifier
-                                .border(1.dp, Brush.horizontalGradient(listOf(Color(0xFF00FFCC), Color(0xFF9E00FF))), RoundedCornerShape(20.dp))
+                                .border(1.dp, if (!useInternalMemory) Color(0xFF00FFCC) else Color(0xFF1E2A2E), RoundedCornerShape(20.dp))
+                                .background(if (!useInternalMemory) Color(0xFF00FFCC).copy(alpha=0.1f) else Color.Transparent)
+                                .clickable { 
+                                    useInternalMemory = false 
+                                    customLocation = "/storage/emulated/0/Movies"
+                                }
                                 .padding(horizontal = 16.dp, vertical = 8.dp)
                         ) {
-                            Text("Choose Custom...", color = Color(0xFF00FFCC), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("Choose Custom...", color = if (!useInternalMemory) Color(0xFF00FFCC) else Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                     
@@ -182,38 +195,68 @@ fun UniversalDownloaderScreen(viewModel: MainViewModel, onMediaClick: (MediaEnti
                             colors = SwitchDefaults.colors(checkedThumbColor = Color(0xFF00FFCC), uncheckedThumbColor = Color.Gray),
                             modifier = Modifier.scale(0.7f)
                         )
-                        Text("Set as preferred location", color = Color.Gray, fontSize = 10.sp)
+                        Text("Set as preferred", color = Color.Gray, fontSize = 10.sp)
                     }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                Text("Target URI: /storage/emulated/0/Download", color = Color(0xFF00FFCC), fontSize = 11.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                if (!useInternalMemory) {
+                    OutlinedTextField(
+                        value = customLocation,
+                        onValueChange = { customLocation = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = androidx.compose.ui.text.TextStyle(color = Color(0xFF00FFCC), fontSize = 11.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = Color(0xFF1E2022),
+                            unfocusedContainerColor = Color(0xFF1E2022),
+                            focusedBorderColor = Color(0xFF00FFCC).copy(alpha=0.5f),
+                            unfocusedBorderColor = Color.Transparent,
+                        ),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+                
+                Text("Target URI: $customLocation", color = Color(0xFF00FFCC), fontSize = 11.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
 
                 Spacer(modifier = Modifier.height(32.dp))
 
                 if (activeDownloads.isNotEmpty()) {
-                    val activeDownloadItem = activeDownloads.first()
-                    val progress = activeDownloadItem.downloadProgress
-                    Text("${(progress * 100).toInt()}% COMPLETE", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Black, modifier = Modifier.align(Alignment.CenterHorizontally))
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(16.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFF1E2A2E))
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(progress)
-                                .fillMaxHeight()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Brush.horizontalGradient(listOf(Color(0xFF00FFCC), Color(0xFF9E00FF), Color(0xFFFF007F))))
-                        )
+                    Text("ACTIVE & QUEUED DOWNLOADS", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Start))
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        activeDownloads.forEach { downloadItem ->
+                            Column {
+                                val progress = downloadItem.downloadProgress
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(downloadItem.title, color = Color.White, fontSize = 12.sp, maxLines = 1, modifier = Modifier.weight(1f))
+                                    Text("${(progress * 100).toInt()}%", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(8.dp)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(Color(0xFF1E2A2E))
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth(progress)
+                                            .fillMaxHeight()
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(Brush.horizontalGradient(listOf(Color(0xFF00FFCC), Color(0xFF9E00FF), Color(0xFFFF007F))))
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(downloadItem.downloadSpeedText, color = Color.Gray, fontSize = 10.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                            }
+                        }
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(activeDownloadItem.downloadSpeedText, color = Color.Gray, fontSize = 12.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
                 } else {
                     Text("0% COMPLETE", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Black, modifier = Modifier.align(Alignment.CenterHorizontally))
                     Spacer(modifier = Modifier.height(8.dp))
@@ -239,7 +282,8 @@ fun UniversalDownloaderScreen(viewModel: MainViewModel, onMediaClick: (MediaEnti
                                 isAudio = formatOptions[selectedFormatIndex].third,
                                 resolution = formatOptions[selectedFormatIndex].first,
                                 fileSizeMb = 125.0,
-                                ytDlpFormat = formatOptions[selectedFormatIndex].second
+                                ytDlpFormat = formatOptions[selectedFormatIndex].second,
+                                customDirectory = customLocation
                             )
                             Toast.makeText(context, "Download started", Toast.LENGTH_SHORT).show()
                             urlInput = ""

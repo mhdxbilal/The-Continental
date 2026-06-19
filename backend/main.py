@@ -51,10 +51,13 @@ class SettingsRequest(BaseModel):
 class URLRequest(BaseModel):
     url: str
 
+from typing import List, Optional
+
 class DownloadRequest(BaseModel):
     urls: list[str]
     format: str = 'bestvideo+bestaudio/best'
     download_to_server: bool = False
+    custom_directory: Optional[str] = None
 
 class ConnectionManager:
     def __init__(self):
@@ -117,6 +120,26 @@ async def get_settings():
 @app.get("/history/")
 async def get_history():
     return load_history()
+
+@app.post("/history/clear/")
+async def clear_history():
+    save_history([])
+    return {"status": "success"}
+
+class HistoryItem(BaseModel):
+    url: str
+    timestamp: float
+
+class RemoveHistoryRequest(BaseModel):
+    items: List[HistoryItem]
+
+@app.post("/history/remove/")
+async def remove_history(req: RemoveHistoryRequest):
+    hist = load_history()
+    to_remove = {(item.url, str(item.timestamp)) for item in req.items}
+    new_hist = [h for h in hist if (h.get('url'), str(h.get('timestamp'))) not in to_remove]
+    save_history(new_hist)
+    return {"status": "success"}
 
 @app.post("/cancel/")
 async def cancel_download(req: URLRequest):
@@ -208,7 +231,10 @@ async def get_formats(req: URLRequest):
 @app.post("/download/")
 async def start_download(req: DownloadRequest):
     settings = load_settings()
-    download_dir = settings.get('preferred_download_directory', 'downloads')
+    if req.custom_directory and req.custom_directory.strip():
+        download_dir = req.custom_directory
+    else:
+        download_dir = settings.get('preferred_download_directory', '/storage/emulated/0/Download')
     
     # Ensure absolute pathing within volume
     abs_dir = os.path.abspath(download_dir)

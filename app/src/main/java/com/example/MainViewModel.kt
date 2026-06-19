@@ -216,9 +216,9 @@ class MainViewModel(
     }
 
     // Downloader system Simulator
-    fun triggerDownload(url: String, title: String, isAudio: Boolean, resolution: String, fileSizeMb: Double, ytDlpFormat: String = "bv*+ba/b") {
+    fun triggerDownload(url: String, title: String, isAudio: Boolean, resolution: String, fileSizeMb: Double, ytDlpFormat: String = "bv*+ba/b", customDirectory: String = "") {
         val calculatedBytes = (fileSizeMb * 1024 * 1024).toLong()
-        val targetFolderName = "Download"
+        val targetFolderName = if (customDirectory.isNotEmpty()) customDirectory.substringAfterLast("/") else "Download"
         val fallbackTitle = title.ifEmpty { "Media_" + System.currentTimeMillis() }
 
         viewModelScope.launch(Dispatchers.IO) {
@@ -245,6 +245,9 @@ class MainViewModel(
             urlsArray.put(url)
             jsonObject.put("urls", urlsArray)
             jsonObject.put("format", ytDlpFormat)
+            if (customDirectory.isNotEmpty()) {
+                jsonObject.put("custom_directory", customDirectory)
+            }
             
             if (isAudio) {
                 val postArray = org.json.JSONArray()

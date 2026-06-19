@@ -56,10 +56,24 @@
         <div id="historyContainer" class="mt-8 border-t border-gray-800 pt-6">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-bold text-gray-200">Download History</h2>
-                <button onclick="fetchHistory()" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 py-1 px-3 rounded transition-colors">
-                    Refresh
-                </button>
+                <div class="flex gap-2">
+                    <button onclick="clearHistory()" class="text-xs bg-red-800 hover:bg-red-700 text-red-200 py-1 px-3 rounded transition-colors">
+                        Clear History
+                    </button>
+                    <button onclick="fetchHistory()" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 py-1 px-3 rounded transition-colors">
+                        Refresh
+                    </button>
+                </div>
             </div>
+            <!-- Multi-select Toolbar -->
+            <div id="multiSelectToolbar" class="hidden flex justify-between items-center mb-4 bg-gray-800 p-2 rounded">
+                <span id="selectedCount" class="text-sm font-bold ml-2">0 selected</span>
+                <div class="flex gap-2">
+                    <button onclick="retrySelected()" class="text-xs bg-blue-600 hover:bg-blue-500 text-white py-1 px-3 rounded transition-colors">Retry</button>
+                    <button onclick="deleteSelected()" class="text-xs bg-red-600 hover:bg-red-500 text-white py-1 px-3 rounded transition-colors">Delete</button>
+                </div>
+            </div>
+            
             <div id="historyList" class="flex flex-col gap-3 max-h-64 overflow-y-auto pr-2">
                 <p class="text-sm text-gray-500">No recent downloads.</p>
             </div>
@@ -319,13 +333,17 @@
         fetch('/settings/')
             .then(res => res.json())
             .then(data => {
-                if(data.preferred_download_directory) {
+                const localDir = localStorage.getItem('downloadDirectory');
+                if (localDir) {
+                    dirInput.value = localDir;
+                } else if(data.preferred_download_directory) {
                     dirInput.value = data.preferred_download_directory;
                 }
             });
 
         // Save settings on blur
         dirInput.addEventListener('blur', () => {
+            localStorage.setItem('downloadDirectory', dirInput.value);
             fetch('/settings/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -336,6 +354,19 @@
                     network_reconnect_attempts: 3
                 })
             });
+        });
+
+        document.getElementById('saveDirBtn').addEventListener('click', () => {
+            fetch('/settings/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    preferred_download_directory: dirInput.value,
+                    download_profile: 'Always Best Quality',
+                    max_concurrent_downloads: 5,
+                    network_reconnect_attempts: 3
+                })
+            }).then(() => showToast("Directory saved."));
         });
 
         function showToast(msg) {
@@ -381,6 +412,77 @@
         }
 
         let currentDownloadUrl = null;
+        let selectedHistoryItems = new Set();
+
+        function toggleSelect(checkbox) {
+            if (checkbox.checked) {
+                selectedHistoryItems.add(checkbox.value);
+            } else {
+                selectedHistoryItems.delete(checkbox.value);
+            }
+            updateToolbar();
+        }
+
+        function updateToolbar() {
+            const toolbar = document.getElementById('multiSelectToolbar');
+            if (selectedHistoryItems.size > 0) {
+                toolbar.classList.remove('hidden');
+                document.getElementById('selectedCount').innerText = `${selectedHistoryItems.size} selected`;
+            } else {
+                toolbar.classList.add('hidden');
+            }
+        }
+
+        async function retrySelected() {
+            const urls = Array.from(selectedHistoryItems).map(id => {
+                const parts = id.split('|');
+                return parts.slice(0, -1).join('|');
+            });
+            const format = document.getElementById('formatSelect').value;
+            const customDir = document.getElementById('dirInput').value.trim();
+
+            try {
+                const res = await fetch('/download/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ urls: urls, format: format, custom_directory: customDir })
+                });
+                
+                if (res.ok) {
+                    showToast("Retrying selected downloads...");
+                    selectedHistoryItems.clear();
+                    updateToolbar();
+                    fetchHistory();
+                } else {
+                    showToast("Failed to retry downloads.");
+                }
+            } catch (e) {
+                showToast("Error retrying downloads.");
+            }
+        }
+
+        async function deleteSelected() {
+            const items = Array.from(selectedHistoryItems).map(id => {
+                const parts = id.split('|');
+                return { url: parts.slice(0, -1).join('|'), timestamp: parseFloat(parts[parts.length-1]) };
+            });
+
+            try {
+                const res = await fetch('/history/remove/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items })
+                });
+                if (res.ok) {
+                    showToast("Selected items deleted.");
+                    selectedHistoryItems.clear();
+                    updateToolbar();
+                    fetchHistory();
+                }
+            } catch(e) {
+                showToast("Error deleting items.");
+            }
+        }
 
         async function fetchHistory() {
             try {
@@ -392,12 +494,28 @@
                     history.forEach(item => {
                         const date = new Date(item.timestamp * 1000).toLocaleString();
                         const colorClass = item.status === 'Completed' ? 'text-green-400' : (item.status === 'Started' ? 'text-blue-400' : 'text-red-400');
+                        
+                        let icon = '';
+                        if (item.status === 'Completed') {
+                            icon = '<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
+                        } else if (item.status === 'Started') {
+                            icon = '<svg class="w-4 h-4 mr-1 inline animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>';
+                        } else {
+                            icon = '<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+                        }
+
+                        const uniqueId = item.url + '|' + item.timestamp;
+                        const isChecked = selectedHistoryItems.has(uniqueId) ? 'checked' : '';
+                        
                         list.innerHTML += `
-                            <div class="bg-gray-800 p-3 rounded-lg text-sm border border-gray-700">
-                                <div class="font-bold text-gray-200 truncate">${item.title}</div>
-                                <div class="flex justify-between mt-1 text-xs">
-                                    <span class="${colorClass}">${item.status}</span>
-                                    <span class="text-gray-500">${date}</span>
+                            <div class="bg-gray-800 p-3 rounded-lg text-sm border border-gray-700 flex items-center gap-3">
+                                <input type="checkbox" class="h-4 w-4 rounded border-gray-600 focus:ring-blue-500 rounded bg-gray-700 cursor-pointer" value="${uniqueId}" ${isChecked} onchange="toggleSelect(this)">
+                                <div class="flex-1 min-w-0">
+                                    <div class="font-bold text-gray-200 truncate">${item.title}</div>
+                                    <div class="flex justify-between mt-1 text-xs items-center">
+                                        <span class="flex items-center ${colorClass}">${icon}${item.status}</span>
+                                        <span class="text-gray-500">${date}</span>
+                                    </div>
                                 </div>
                             </div>
                         `;
@@ -405,9 +523,24 @@
                 } else {
                     list.innerHTML = '<p class="text-sm text-gray-500">No recent downloads.</p>';
                 }
+                updateToolbar();
             } catch (e) {}
         }
         
+        async function clearHistory() {
+            try {
+                const res = await fetch('/history/clear/', { method: 'POST' });
+                if (res.ok) {
+                    showToast("History cleared.");
+                    fetchHistory();
+                } else {
+                    showToast("Failed to clear history.");
+                }
+            } catch (e) {
+                showToast("Error clearing history.");
+            }
+        }
+
         async function cancelActiveDownload(targetUrl) {
             if (!targetUrl) return;
             try {
@@ -436,7 +569,7 @@
                 const res = await fetch('/download/', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ urls: urls, format: format })
+                    body: JSON.stringify({ urls: urls, format: format, custom_directory: document.getElementById('dirInput').value.trim() })
                 });
                 
                 if (res.ok) {
@@ -457,6 +590,7 @@
 
         // Call on load
         fetchHistory();
+        setInterval(fetchHistory, 5000);
     </script>
 </body>
 </html>
