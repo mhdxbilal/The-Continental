@@ -6,6 +6,7 @@
     <title>The Continental - Downloader</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <style>
         body { background-color: #000000; color: #ffffff; }
         .glass { background: rgba(18, 18, 18, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
@@ -24,11 +25,11 @@
         <div class="flex justify-between items-center mb-6">
             <h1 class="text-3xl font-bold text-gray-100">Universal Downloader</h1>
             <div class="flex gap-2">
-                <button onclick="openSettings()" class="text-xs text-gray-400 hover:text-white transition-colors border border-gray-700 px-2 py-1 rounded">
-                    Settings
+                <button onclick="openSettings()" title="Configure downloader settings" class="p-2 text-gray-400 hover:text-white transition-colors border border-gray-700 rounded-lg bg-[#121212] hover:bg-gray-800">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                 </button>
-                <button onclick="toggleTheme()" class="text-xs text-gray-400 hover:text-white transition-colors border border-gray-700 px-2 py-1 rounded">
-                    Toggle Contrast
+                <button onclick="toggleTheme()" title="Switch between high-contrast and normal themes" class="p-2 text-gray-400 hover:text-white transition-colors border border-gray-700 rounded-lg bg-[#121212] hover:bg-gray-800">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
                 </button>
             </div>
         </div>
@@ -46,21 +47,33 @@
                 <option value="bestaudio/best">Audio Only</option>
             </select>
             
-            <button onclick="startDownload()" id="btnDownload" class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg transition-colors shadow-lg shadow-blue-500/30 mt-2" disabled>
+            <button onclick="startDownload()" id="btnDownload" title="Start downloading the provided URLs" class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg transition-colors shadow-lg shadow-blue-500/30 mt-2" disabled>
                 Initiate Sequence
             </button>
         </div>
+
+        <!-- Dashboard Summary Header -->
+        <div id="dashboardSummary" class="hidden bg-gray-800 p-4 rounded-lg flex justify-between items-center mb-4 mt-8 border border-gray-700">
+             <div class="text-sm">
+                 <div class="text-gray-400">Total Speed</div>
+                 <div class="font-bold text-xl text-blue-400" id="dashTotalSpeed">0.00 MB/s</div>
+             </div>
+             <div class="text-sm text-right">
+                 <div class="text-gray-400">Active / Queued</div>
+                 <div class="font-bold text-xl text-yellow-400" id="dashActiveCount">0 / 0</div>
+             </div>
+        </div>
         
-        <div id="progressContainer" class="mt-8 hidden space-y-4">
+        <div id="progressContainer" class="mt-4 hidden space-y-4">
         </div>
         <div id="historyContainer" class="mt-8 border-t border-gray-800 pt-6">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-bold text-gray-200">Download History</h2>
                 <div class="flex gap-2">
-                    <button onclick="clearHistory()" class="text-xs bg-red-800 hover:bg-red-700 text-red-200 py-1 px-3 rounded transition-colors">
+                    <button onclick="clearHistory()" title="Clear all download history" class="text-xs bg-red-800 hover:bg-red-700 text-red-200 py-1 px-3 rounded transition-colors">
                         Clear History
                     </button>
-                    <button onclick="fetchHistory()" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 py-1 px-3 rounded transition-colors">
+                    <button onclick="fetchHistory()" title="Refresh download history list" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 py-1 px-3 rounded transition-colors">
                         Refresh
                     </button>
                 </div>
@@ -69,8 +82,8 @@
             <div id="multiSelectToolbar" class="hidden flex justify-between items-center mb-4 bg-gray-800 p-2 rounded">
                 <span id="selectedCount" class="text-sm font-bold ml-2">0 selected</span>
                 <div class="flex gap-2">
-                    <button onclick="retrySelected()" class="text-xs bg-blue-600 hover:bg-blue-500 text-white py-1 px-3 rounded transition-colors">Retry</button>
-                    <button onclick="deleteSelected()" class="text-xs bg-red-600 hover:bg-red-500 text-white py-1 px-3 rounded transition-colors">Delete</button>
+                    <button onclick="retrySelected()" title="Retry selected downloads" class="text-xs bg-blue-600 hover:bg-blue-500 text-white py-1 px-3 rounded transition-colors">Retry</button>
+                    <button onclick="deleteSelected()" title="Delete selected items from history" class="text-xs bg-red-600 hover:bg-red-500 text-white py-1 px-3 rounded transition-colors">Delete</button>
                 </div>
             </div>
             
@@ -106,8 +119,8 @@
             </div>
             
             <div class="flex justify-end gap-2">
-                <button onclick="closeSettings()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded">Cancel</button>
-                <button onclick="saveSettings()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded">Save</button>
+                <button onclick="closeSettings()" title="Discard changes" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded">Cancel</button>
+                <button onclick="saveSettings()" title="Save downloader settings" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded">Save</button>
             </div>
         </div>
     </div>
@@ -154,29 +167,58 @@
 
         const chartData = {};
         const chartRefs = {};
+        const currentSpeeds = {};
+        window.lastHistoryData = [];
+
+        function updateDashboardSummary() {
+            let totalSpeedMB = 0;
+            let activeCount = 0;
+            
+            for (let url in currentSpeeds) {
+                if (currentSpeeds[url] > 0) {
+                    totalSpeedMB += currentSpeeds[url];
+                    activeCount++;
+                }
+            }
+            
+            document.getElementById('dashTotalSpeed').innerText = totalSpeedMB.toFixed(2) + ' MB/s';
+            
+            let startedCount = 0;
+            if (window.lastHistoryData) {
+                startedCount = window.lastHistoryData.filter(i => i.status === 'Started').length;
+            }
+            let queuedCount = Math.max(0, startedCount - activeCount);
+            
+            document.getElementById('dashActiveCount').innerText = `${activeCount} / ${queuedCount}`;
+        }
 
         function createProgressElement(url) {
             const div = document.createElement('div');
-            div.className = "bg-gray-900 border border-gray-800 p-4 rounded-lg";
+            div.className = "bg-gray-900 border border-gray-800 p-4 rounded-lg flex items-start gap-3 select-none";
             const safeUrlId = `dl-${btoa(url).replace(/=/g, '')}`;
             div.id = safeUrlId;
             div.innerHTML = `
-                <div class="flex justify-between items-center mb-2">
-                    <div class="flex justify-between text-sm text-gray-400 w-full min-w-0 pr-4">
-                        <span class="filename truncate max-w-[60%]">Preparing...</span>
-                        <span class="percent">0%</span>
+                <div class="mt-1 cursor-grab active:cursor-grabbing text-gray-500 hover:text-white transition-colors drag-handle" title="Drag to reorder">
+                    <svg class="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"></path></svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex justify-between items-center mb-2 gap-4">
+                        <div class="flex justify-between text-sm text-gray-400 w-full min-w-0">
+                            <span class="filename truncate max-w-[70%]">Preparing...</span>
+                            <span class="percent">0%</span>
+                        </div>
+                        <button onclick="cancelActiveDownload('${url}')" title="Stop and cancel this active download" class="bg-red-600 hover:bg-red-700 text-white text-xs py-1 px-3 rounded whitespace-nowrap transition-colors">
+                            Cancel
+                        </button>
                     </div>
-                    <button onclick="cancelActiveDownload('${url}')" class="bg-red-600 hover:bg-red-700 text-white text-xs py-1 px-3 rounded whitespace-nowrap transition-colors">
-                        Cancel
-                    </button>
-                </div>
-                <div class="w-full bg-gray-800 rounded-full h-2 mb-2">
-                    <div class="progressBar bg-blue-500 h-2 rounded-full transition-all duration-300 ease-out" style="width: 0%"></div>
-                </div>
-                <div class="chart-container w-full h-12 mt-2 bg-[#0a0a0a] rounded overflow-hidden relative"></div>
-                <div class="flex justify-between text-xs text-gray-500 mt-2">
-                    <span class="speed">0 MB/s</span>
-                    <span class="eta">ETA: -</span>
+                    <div class="w-full bg-gray-800 rounded-full h-2 mb-2">
+                        <div class="progressBar bg-blue-500 h-2 rounded-full transition-all duration-300 ease-out" style="width: 0%"></div>
+                    </div>
+                    <div class="chart-container w-full h-12 mt-2 bg-[#0a0a0a] rounded border border-gray-800/50 overflow-hidden relative"></div>
+                    <div class="flex justify-between text-xs text-gray-500 mt-2 font-mono">
+                        <span class="speed">0 MB/s</span>
+                        <span class="eta">ETA: -</span>
+                    </div>
                 </div>
             `;
             progressContainer.appendChild(div);
@@ -210,6 +252,9 @@
             if (speedStr.includes('KiB/s')) val = val / 1024;
             else if (speedStr.includes('GiB/s')) val = val * 1024;
             
+            currentSpeeds[url] = val;
+            updateDashboardSummary();
+            
             chartData[url].push(val);
             if (chartData[url].length > 50) {
                 chartData[url].shift();
@@ -242,6 +287,7 @@
         ws.onmessage = function(event) {
             const data = JSON.parse(event.data);
             progressContainer.classList.remove('hidden');
+            document.getElementById('dashboardSummary').classList.remove('hidden');
             
             const safeUrlId = data.url ? `dl-${btoa(data.url).replace(/=/g, '')}` : null;
             let el = safeUrlId ? document.getElementById(safeUrlId) : null;
@@ -262,6 +308,8 @@
                 updateChart(data.url, data.speed);
 
             } else if (data.type === 'finished') {
+                if (data.url) currentSpeeds[data.url] = 0;
+                updateDashboardSummary();
                 showToast(`Finished downloading: ${data.filename.split('/').pop()}`);
                 playAlertSound();
                 if (el) {
@@ -272,6 +320,8 @@
                 }
                 setTimeout(fetchHistory, 1000);
             } else if (data.type === 'error') {
+                if (data.url) currentSpeeds[data.url] = 0;
+                updateDashboardSummary();
                 showToast(`Error: ${data.message}`);
                 console.error(data.url, data.message);
                 if (el) el.remove();
@@ -488,6 +538,9 @@
             try {
                 const res = await fetch('/history/');
                 const history = await res.json();
+                window.lastHistoryData = history || [];
+                updateDashboardSummary();
+
                 const list = document.getElementById('historyList');
                 if (history && history.length > 0) {
                     list.innerHTML = '';
@@ -591,6 +644,13 @@
         // Call on load
         fetchHistory();
         setInterval(fetchHistory, 5000);
+
+        // Initialize Sortable for the active downloads list
+        new Sortable(document.getElementById('progressContainer'), {
+            animation: 150,
+            handle: '.drag-handle',
+            ghostClass: 'opacity-50'
+        });
     </script>
 </body>
 </html>
