@@ -18,7 +18,7 @@ interface MediaDao {
     fun getActiveDownloads(): Flow<List<MediaEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertMedia(media: MediaEntity)
+    suspend fun insertMedia(media: MediaEntity): Long
 
     @Update
     suspend fun updateMedia(media: MediaEntity)

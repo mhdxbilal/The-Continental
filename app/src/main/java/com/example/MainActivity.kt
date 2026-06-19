@@ -134,7 +134,7 @@ fun MainAppScreen(
 
     Scaffold(
         bottomBar = {
-            SnaptubeBottomNavBar(navController = navController)
+            MainBottomNavBar(navController = navController)
         },
         containerColor = Obsidian
     ) { paddingValues ->
@@ -161,25 +161,30 @@ fun MainAppScreen(
                 )
             }
             
-            NavHost(navController = navController, startDestination = "downloader", modifier = Modifier.fillMaxSize()) {
-                composable("downloader") { 
-                    DownloaderScreen(viewModel) { video ->
-                        activePlayingVideo = video
-                        currentController?.setMediaItem(MediaItem.fromUri(video.uri))
-                        currentController?.prepare()
-                        currentController?.play()
-                    } 
-                }
-                composable("play") { 
-                    PlayerFoldersScreen(viewModel, onVideoClick = { video ->
+            NavHost(navController = navController, startDestination = "video", modifier = Modifier.fillMaxSize()) {
+                composable("video") { 
+                    VideoFoldersScreen(viewModel, onVideoClick = { video ->
                         activePlayingVideo = video
                         currentController?.setMediaItem(MediaItem.fromUri(video.uri))
                         currentController?.prepare()
                         currentController?.play()
                     }) 
                 }
+                composable("browse") { 
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("Browse Screen", color = Color.White)
+                    }
+                }
+                composable("downloader") { 
+                    UniversalDownloaderScreen(viewModel) { video ->
+                        activePlayingVideo = video
+                        currentController?.setMediaItem(MediaItem.fromUri(video.uri))
+                        currentController?.prepare()
+                        currentController?.play()
+                    } 
+                }
                 composable("settings") { 
-                    SettingsScreen(viewModel, context) 
+                    NewSettingsScreen(viewModel, context) 
                 }
             }
 
@@ -206,70 +211,57 @@ fun MainAppScreen(
 }
 
 @Composable
-fun SnaptubeBottomNavBar(navController: NavHostController) {
+fun MainBottomNavBar(navController: NavHostController) {
     data class NavItem(val route: String, val selectedIcon: ImageVector, val unselectedIcon: ImageVector, val label: String)
     val items = listOf(
-        NavItem("downloader", Icons.Filled.Search, Icons.Outlined.Search, "Download"),
-        NavItem("play", Icons.Filled.PlayCircle, Icons.Outlined.PlayCircle, "Play"),
+        NavItem("video", Icons.Filled.Movie, Icons.Outlined.Movie, "Video"),
+        NavItem("browse", Icons.Filled.Folder, Icons.Outlined.Folder, "Browse"),
+        NavItem("downloader", Icons.Filled.Download, Icons.Outlined.Download, "Downloader"),
         NavItem("settings", Icons.Filled.Settings, Icons.Outlined.Settings, "Settings")
     )
     
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .navigationBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 12.dp)
+    NavigationBar(
+        containerColor = Color(0xFF0A1214), // Dark background matching screen
+        contentColor = Color.Gray,
+        tonalElevation = 0.dp,
+        modifier = Modifier.border(width = 1.dp, color = Color(0xFF1E2A2E))
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(24.dp))
-                .background(GlassBase.copy(alpha = 0.9f))
-                .border(1.dp, GlassBorder, RoundedCornerShape(24.dp))
-                .padding(vertical = 12.dp, horizontal = 16.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            items.forEach { item ->
-                val isSelected = currentRoute == item.route
-                val scale by animateFloatAsState(targetValue = if (isSelected) 1.15f else 1f, label = "scale")
-                
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                    modifier = Modifier
-                        .clickable(
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() }
-                        ) {
-                            navController.navigate(item.route) {
-                                popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        }
-                        .padding(horizontal = 14.dp, vertical = 4.dp)
-                ) {
+        items.forEach { item ->
+            val isSelected = currentRoute == item.route
+            NavigationBarItem(
+                selected = isSelected,
+                onClick = {
+                    navController.navigate(item.route) {
+                        popUpTo(navController.graph.startDestinationId) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                },
+                icon = {
                     Icon(
                         imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
                         contentDescription = item.label,
-                        tint = if (isSelected) RetroGold else Color.Gray,
-                        modifier = Modifier
-                            .size(24.dp)
-                            .scale(scale)
+                        modifier = Modifier.size(24.dp)
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                },
+                label = {
                     Text(
                         text = item.label,
-                        color = if (isSelected) RetroGold else Color.Gray,
                         fontSize = 11.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                     )
-                }
-            }
+                },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color.White,
+                    unselectedIconColor = Color(0xFFB0BEC5),
+                    selectedTextColor = Color.White,
+                    unselectedTextColor = Color(0xFFB0BEC5),
+                    indicatorColor = Color(0xFF006064) // Dark teal pill
+                )
+            )
         }
     }
 }
@@ -691,7 +683,7 @@ fun DownloaderScreen(viewModel: MainViewModel, onMediaClick: (MediaEntity) -> Un
                         }
                     }
 
-                    Divider(color = GlassBorder, modifier = Modifier.padding(vertical = 12.dp))
+                    HorizontalDivider(color = GlassBorder, modifier = Modifier.padding(vertical = 12.dp))
 
                     Text("VIDEO", color = RetroGold, fontSize = 11.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(vertical = 6.dp))
                     

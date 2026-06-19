@@ -14,13 +14,13 @@ import kotlinx.coroutines.launch
 class MainViewModel(
     application: Application,
     private val mediaDao: MediaDao,
-    private val userPrefs: UserPreferencesRepository
+    val userPrefs: UserPreferencesRepository
 ) : AndroidViewModel(application) {
 
     val userSettings = userPrefs.userSettingsFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.Eagerly,
-        initialValue = UserSettings(-1.0f, 50, 0, false, 0, false, "", "")
+        initialValue = UserSettings()
     )
 
     // Flow lists directly from secure DB
@@ -140,10 +140,13 @@ class MainViewModel(
     }
 
     // Downloader system Simulator
-    fun triggerDownload(url: String, title: String, isAudio: Boolean, resolution: String, fileSizeMb: Double) {
+    fun triggerDownload(url: String, title: String, isAudio: Boolean, resolution: String, fileSizeMb: Double, ytDlpFormat: String = "bv*+ba/b") {
         val calculatedBytes = (fileSizeMb * 1024 * 1024).toLong()
         val targetFolderName = if (isAudio) "Music Download" else "Media Download"
         val fallbackTitle = title.ifEmpty { "Media_" + System.currentTimeMillis() }
+
+        // Simulated yt-dlp wrapper argument usage
+        println("yt-dlp wrapper executed with format: -f \"$ytDlpFormat\" for URL: $url")
 
         viewModelScope.launch(Dispatchers.IO) {
             val downloadItem = MediaEntity(
@@ -161,7 +164,7 @@ class MainViewModel(
                 thumbnailUri = if (isAudio) "https://picsum.photos/id/150/400/250" else "https://picsum.photos/id/111/400/250"
             )
 
-            mediaDao.insertMedia(downloadItem)
+            val rowId = mediaDao.insertMedia(downloadItem)
 
             // Dynamic live progress updates
             val simulationSteps = listOf(
@@ -174,18 +177,7 @@ class MainViewModel(
             )
 
             // Flow simulator
-            var currentMedia = downloadItem
-            // Fetch the assigned ID by querying DB
-            var dbId = 0
-            mediaDao.getAllPublicMedia().take(1).collect { list ->
-                val highest = list.maxByOrNull { it.id }
-                if (highest != null) {
-                    dbId = highest.id
-                }
-            }
-            if (dbId == 0) dbId = (Math.random() * 1000).toInt() + 5
-
-            currentMedia = currentMedia.copy(id = dbId)
+            var currentMedia = downloadItem.copy(id = rowId.toInt())
 
             for (step in simulationSteps) {
                 delay(1200)
