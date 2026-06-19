@@ -50,6 +50,11 @@ data class UserSettings(
     val fileAccessMode: String = "MediaStore (Recommended/Default)",
     val tunneledPlayback: Boolean = false,
 
+    val downloaderBackendUrl: String = "http://10.0.2.2:8000",
+    val autoStartDownloader: Boolean = true,
+    val downloadSimultaneously: Int = 3,
+    val downloadOverWifiOnly: Boolean = false,
+
     val brightness: Float = -1f,
     val volume: Int = 50,
     val orientation: Int = 0,
@@ -99,6 +104,11 @@ class UserPreferencesRepository(private val dataStore: DataStore<Preferences>) {
         val AUTO_RESCAN = booleanPreferencesKey("auto_rescan")
         val FILE_ACCESS_MODE = stringPreferencesKey("file_access_mode")
         val TUNNELED_PLAYBACK = booleanPreferencesKey("tunneled_playback")
+
+        val DOWNLOADER_BACKEND_URL = stringPreferencesKey("downloader_backend_url")
+        val AUTO_START_DOWNLOADER = booleanPreferencesKey("auto_start_downloader")
+        val DOWNLOAD_SIMULTANEOUSLY = intPreferencesKey("download_simultaneously")
+        val DOWNLOAD_OVER_WIFI_ONLY = booleanPreferencesKey("download_over_wifi_only")
 
         // Legacy fields mapping
         val BRIGHTNESS = floatPreferencesKey("brightness")
@@ -158,6 +168,11 @@ class UserPreferencesRepository(private val dataStore: DataStore<Preferences>) {
                 autoRescan = preferences[Keys.AUTO_RESCAN] ?: true,
                 fileAccessMode = preferences[Keys.FILE_ACCESS_MODE] ?: "MediaStore (Recommended/Default)",
                 tunneledPlayback = preferences[Keys.TUNNELED_PLAYBACK] ?: false,
+
+                downloaderBackendUrl = preferences[Keys.DOWNLOADER_BACKEND_URL] ?: "http://10.0.2.2:8000",
+                autoStartDownloader = preferences[Keys.AUTO_START_DOWNLOADER] ?: true,
+                downloadSimultaneously = preferences[Keys.DOWNLOAD_SIMULTANEOUSLY] ?: 3,
+                downloadOverWifiOnly = preferences[Keys.DOWNLOAD_OVER_WIFI_ONLY] ?: false,
 
                 brightness = preferences[Keys.BRIGHTNESS] ?: -1.0f,
                 volume = preferences[Keys.VOLUME] ?: 50,
@@ -223,4 +238,9 @@ class UserPreferencesRepository(private val dataStore: DataStore<Preferences>) {
     suspend fun updateAutoRescan(v: Boolean) = updateSetting(Keys.AUTO_RESCAN, v)
     suspend fun updateFileAccessMode(v: String) = updateSetting(Keys.FILE_ACCESS_MODE, v)
     suspend fun updateTunneledPlayback(v: Boolean) = updateSetting(Keys.TUNNELED_PLAYBACK, v)
+
+    suspend fun updateDownloaderBackendUrl(v: String) = updateSetting(Keys.DOWNLOADER_BACKEND_URL, v)
+    suspend fun updateAutoStartDownloader(v: Boolean) = updateSetting(Keys.AUTO_START_DOWNLOADER, v)
+    suspend fun updateDownloadSimultaneously(v: Int) = updateSetting(Keys.DOWNLOAD_SIMULTANEOUSLY, v)
+    suspend fun updateDownloadOverWifiOnly(v: Boolean) = updateSetting(Keys.DOWNLOAD_OVER_WIFI_ONLY, v)
 }

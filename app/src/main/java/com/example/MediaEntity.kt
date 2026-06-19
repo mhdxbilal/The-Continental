@@ -11,7 +11,7 @@ data class MediaEntity(
     val durationMs: Long = 0,
     val fileSize: Long = 0,
     val mimeType: String = "video/mp4",
-    val folderName: String = "Media Download",
+    val folderName: String = "Download",
     val isPrivate: Boolean = false,
     val playlistName: String = "", // Playlist name relationship (e.g. "ggdea")
     val isDownloaded: Boolean = true, // true if finished, false if downloading

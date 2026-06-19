@@ -188,7 +188,7 @@ fun UniversalDownloaderScreen(viewModel: MainViewModel, onMediaClick: (MediaEnti
 
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                Text("Target URI: primary:Media Download", color = Color(0xFF00FFCC), fontSize = 11.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                Text("Target URI: /storage/emulated/0/Download", color = Color(0xFF00FFCC), fontSize = 11.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
 
                 Spacer(modifier = Modifier.height(32.dp))
 

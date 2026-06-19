@@ -733,7 +733,7 @@ fun PlayerFoldersScreen(viewModel: MainViewModel, onVideoClick: (MediaEntity) ->
     val userSettings by viewModel.userSettings.collectAsStateWithLifecycle()
 
     var activePillIndex by remember { mutableIntStateOf(0) } // 0: Folders, 1: Playlists, 2: The Vault
-    val foldersList = listOf("Media Download", "Movies", "Camera", "Music Download")
+    val foldersList = listOf("Download", "Movies", "Camera")
 
     var selectedFolderDetail by remember { mutableStateOf<String?>(null) }
     

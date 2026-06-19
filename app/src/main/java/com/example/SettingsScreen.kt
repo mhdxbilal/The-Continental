@@ -34,7 +34,7 @@ fun NewSettingsScreen(viewModel: MainViewModel, context: Context, onClose: () ->
     val scope = rememberCoroutineScope()
 
     var selectedTab by remember { mutableStateOf("CONTROLS") }
-    val tabs = listOf("CONTROLS", "GESTURES", "EQUALIZER", "DISPLAY & SORT", "LIBRARY")
+    val tabs = listOf("CONTROLS", "GESTURES", "EQUALIZER", "DISPLAY & SORT", "LIBRARY", "DOWNLOADER")
 
     Box(modifier = Modifier.fillMaxSize().background(DarkBackground), contentAlignment = Alignment.Center) {
         Column(
@@ -113,6 +113,7 @@ fun NewSettingsScreen(viewModel: MainViewModel, context: Context, onClose: () ->
                             "EQUALIZER" -> equalizerTab(userSettings, viewModel.userPrefs, scope)
                             "DISPLAY & SORT" -> displayAndSortTab(userSettings, viewModel.userPrefs, scope)
                             "LIBRARY" -> libraryTab(userSettings, viewModel.userPrefs, scope)
+                            "DOWNLOADER" -> downloaderTab(userSettings, viewModel.userPrefs, scope)
                         }
                     }
                 }

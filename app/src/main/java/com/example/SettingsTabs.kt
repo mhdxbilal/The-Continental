@@ -226,6 +226,41 @@ fun LazyListScope.libraryTab(settings: UserSettings, repo: UserPreferencesReposi
     }
 }
 
+fun LazyListScope.downloaderTab(settings: UserSettings, repo: UserPreferencesRepository, scope: CoroutineScope) {
+    item {
+        Text("Downloader Settings", color = CyberCyan, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp))
+        
+        SettingsTextInputItem(
+            title = "Backend URL",
+            value = settings.downloaderBackendUrl,
+            onValueChange = { scope.launch { repo.updateDownloaderBackendUrl(it) } }
+        )
+        
+        SettingsCheckboxItem(
+            title = "Auto Start Downloader",
+            subtitle = "Automatically start downloading queued items",
+            isChecked = settings.autoStartDownloader,
+            onCheckedChange = { scope.launch { repo.updateAutoStartDownloader(it) } }
+        )
+
+        SettingsSliderItem(
+            title = "Simultaneous Downloads",
+            value = settings.downloadSimultaneously.toFloat(),
+            valueRange = 1f..10f,
+            valueSuffix = " files",
+            onValueChange = { scope.launch { repo.updateDownloadSimultaneously(it.toInt()) } }
+        )
+
+        SettingsCheckboxItem(
+            title = "Download Over WiFi Only",
+            subtitle = "Pause downloads when on cellular data",
+            isChecked = settings.downloadOverWifiOnly,
+            onCheckedChange = { scope.launch { repo.updateDownloadOverWifiOnly(it) } }
+        )
+    }
+}
+
+
 @Composable
 fun EqBand(label: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -295,6 +330,30 @@ fun SettingsTextValueItem(title: String, value: String, valueColor: Color = Cybe
         Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
         Spacer(modifier = Modifier.height(4.dp))
         Text(value, color = valueColor, fontSize = 12.sp)
+    }
+}
+
+@Composable
+fun SettingsTextInputItem(title: String, value: String, onValueChange: (String) -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 16.dp)
+    ) {
+        Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = CyberCyan,
+                unfocusedBorderColor = Color.Gray,
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White
+            ),
+            singleLine = true
+        )
     }
 }
 

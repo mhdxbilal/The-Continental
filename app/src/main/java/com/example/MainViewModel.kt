@@ -10,6 +10,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 
 class MainViewModel(
     application: Application,
@@ -98,7 +100,7 @@ class MainViewModel(
                             durationMs = 268000,
                             fileSize = 139354000,
                             mimeType = "video/mp4",
-                            folderName = "Media Download",
+                            folderName = "Download",
                             thumbnailUri = "https://picsum.photos/id/10/400/250",
                             isDownloaded = true
                         ),
@@ -128,7 +130,7 @@ class MainViewModel(
                             durationMs = 150000,
                             fileSize = 34500000,
                             mimeType = "video/mp4",
-                            folderName = "Media Download",
+                            folderName = "Download",
                             thumbnailUri = "https://picsum.photos/id/40/400/250",
                             isDownloaded = true
                         )
@@ -139,63 +141,141 @@ class MainViewModel(
         }
     }
 
+    private val client = okhttp3.OkHttpClient()
+    private var webSocket: okhttp3.WebSocket? = null
+
+    init {
+        viewModelScope.launch {
+            userPrefs.userSettingsFlow
+                .map { it.downloaderBackendUrl }
+                .distinctUntilChanged()
+                .collect { newUrl ->
+                    connectWebSocket(newUrl)
+                }
+        }
+    }
+
+    private fun connectWebSocket(backendUrl: String) {
+        webSocket?.cancel() // close existing socket if any
+        val url = backendUrl.replace("http://", "ws://").replace("https://", "wss://") + "/ws"
+        val request = okhttp3.Request.Builder().url(url).build()
+        webSocket = client.newWebSocket(request, object : okhttp3.WebSocketListener() {
+            override fun onMessage(webSocket: okhttp3.WebSocket, text: String) {
+                try {
+                    val json = org.json.JSONObject(text)
+                    val type = json.optString("type")
+                    if (type == "progress") {
+                        val percentStr = json.optString("percent").replace("%", "").replace("\u001B\\[.*?m".toRegex(), "").trim()
+                        val speedStr = json.optString("speed")
+                        val url = json.optString("url")
+                        
+                        val speedTxt = speedStr + " - " + json.optString("eta")
+                        val pct = percentStr.toFloatOrNull()?.div(100f) ?: 0f
+
+                        viewModelScope.launch(Dispatchers.IO) {
+                            val active = mediaDao.getActiveDownloads().first()
+                            val match = active.find { it.uri == url }
+                            if (match != null) {
+                                mediaDao.insertMedia(match.copy(
+                                    downloadProgress = pct,
+                                    downloadSpeedText = speedTxt
+                                ))
+                            }
+                        }
+                    } else if (type == "finished") {
+                        val url = json.optString("url")
+                        viewModelScope.launch(Dispatchers.IO) {
+                            val active = mediaDao.getActiveDownloads().first()
+                            val match = active.find { it.uri == url }
+                            if (match != null) {
+                                mediaDao.insertMedia(match.copy(
+                                    downloadProgress = 1.0f,
+                                    downloadSpeedText = "Finished",
+                                    isDownloaded = true
+                                ))
+                            }
+                        }
+                    } else if (type == "error") {
+                        val url = json.optString("url")
+                        viewModelScope.launch(Dispatchers.IO) {
+                            val active = mediaDao.getActiveDownloads().first()
+                            val match = active.find { it.uri == url }
+                            if (match != null) {
+                                mediaDao.insertMedia(match.copy(
+                                    downloadSpeedText = "Error: " + json.optString("message"),
+                                    isDownloaded = false
+                                ))
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        })
+    }
+
     // Downloader system Simulator
     fun triggerDownload(url: String, title: String, isAudio: Boolean, resolution: String, fileSizeMb: Double, ytDlpFormat: String = "bv*+ba/b") {
         val calculatedBytes = (fileSizeMb * 1024 * 1024).toLong()
-        val targetFolderName = if (isAudio) "Music Download" else "Media Download"
+        val targetFolderName = "Download"
         val fallbackTitle = title.ifEmpty { "Media_" + System.currentTimeMillis() }
-
-        // Simulated yt-dlp wrapper argument usage
-        println("yt-dlp wrapper executed with format: -f \"$ytDlpFormat\" for URL: $url")
 
         viewModelScope.launch(Dispatchers.IO) {
             val downloadItem = MediaEntity(
                 title = fallbackTitle,
                 uri = url.ifEmpty { "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" },
-                durationMs = 180000,
-                fileSize = calculatedBytes,
+                durationMs = 0,
+                fileSize = 0,
                 mimeType = if (isAudio) "audio/mp3" else "video/mp4",
                 folderName = targetFolderName,
                 isDownloaded = false,
                 downloadProgress = 0f,
-                downloadSpeedText = "Initializing...",
+                downloadSpeedText = "Queued...",
                 isAudioOnly = isAudio,
                 videoResolution = resolution,
                 thumbnailUri = if (isAudio) "https://picsum.photos/id/150/400/250" else "https://picsum.photos/id/111/400/250"
             )
 
-            val rowId = mediaDao.insertMedia(downloadItem)
+            mediaDao.insertMedia(downloadItem)
 
-            // Dynamic live progress updates
-            val simulationSteps = listOf(
-                Pair(0.15f, "18.3 MB/s"),
-                Pair(0.46f, "35.4 MB/s"),
-                Pair(0.78f, "28.9 MB/s"),
-                Pair(0.94f, "14.2 MB/s"),
-                Pair(0.96f, "3.0 MB/s"),
-                Pair(0.99f, "Converting...")
-            )
-
-            // Flow simulator
-            var currentMedia = downloadItem.copy(id = rowId.toInt())
-
-            for (step in simulationSteps) {
-                delay(1200)
-                currentMedia = currentMedia.copy(
-                    downloadProgress = step.first,
-                    downloadSpeedText = step.second
-                )
-                mediaDao.insertMedia(currentMedia)
+            // Trigger backend
+            val jsonObject = org.json.JSONObject()
+            val urlsArray = org.json.JSONArray()
+            urlsArray.put(url)
+            jsonObject.put("urls", urlsArray)
+            jsonObject.put("format", ytDlpFormat)
+            
+            if (isAudio) {
+                val postArray = org.json.JSONArray()
+                val postObj = org.json.JSONObject()
+                postObj.put("key", "FFmpegExtractAudio")
+                postObj.put("preferredcodec", "mp3")
+                postObj.put("preferredquality", "192")
+                postArray.put(postObj)
+                jsonObject.put("postprocessors", postArray)
+            } else {
+                jsonObject.put("postprocessors", org.json.JSONArray())
             }
 
-            delay(1500)
-            // Finished
-            currentMedia = currentMedia.copy(
-                isDownloaded = true,
-                downloadProgress = 1.0f,
-                downloadSpeedText = ""
-            )
-            mediaDao.insertMedia(currentMedia)
+            val jsonString = jsonObject.toString()
+            val body = jsonString.toRequestBody("application/json; charset=utf-8".toMediaType())
+
+            val urlDownload = userSettings.value.downloaderBackendUrl + "/download/"
+            val request = okhttp3.Request.Builder()
+                .url(urlDownload)
+                .post(body)
+                .build()
+
+            try {
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        println("Failed to trigger download: " + response.message)
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 

@@ -21,7 +21,12 @@ def load_settings():
     if os.path.exists(SETTINGS_FILE):
         with open(SETTINGS_FILE, 'r') as f:
             return json.load(f)
-    return {"preferred_download_directory": "downloads", "default_quality": "bestvideo+bestaudio/best"}
+    return {
+        "preferred_download_directory": "/storage/emulated/0/Download", 
+        "default_quality": "bestvideo+bestaudio/best",
+        "max_concurrent_downloads": 5,
+        "network_reconnect_attempts": 3
+    }
 
 def save_settings(settings):
     with open(SETTINGS_FILE, 'w') as f:
@@ -40,6 +45,8 @@ def save_history(history):
 class SettingsRequest(BaseModel):
     preferred_download_directory: str
     download_profile: str = "Always Best Quality"
+    max_concurrent_downloads: int = 5
+    network_reconnect_attempts: int = 3
     
 class URLRequest(BaseModel):
     url: str
@@ -75,30 +82,31 @@ manager = ConnectionManager()
 
 active_downloads = {} # url -> is_cancelled flag
 
-def progress_hook(d):
-    status = d.get('status')
-    info_dict = d.get('info_dict', {})
-    url = info_dict.get('webpage_url')
-    
-    if url in active_downloads and active_downloads[url]:
-        raise Exception("DownloadCancelledByUser")
-        
-    if status == 'downloading':
-        percent = d.get('_percent_str', '0.0%')
-        speed = d.get('_speed_str', 'N/A')
-        eta = d.get('_eta_str', 'N/A')
-        filename = d.get('filename', 'Unknown')
-        msg = {"type": "progress", "filename": filename, "percent": percent, "speed": speed, "eta": eta}
-        asyncio.run(manager.broadcast(json.dumps(msg)))
-    elif status == 'finished':
-        msg = {"type": "finished", "filename": d.get('filename', 'Unknown')}
-        asyncio.run(manager.broadcast(json.dumps(msg)))
+def get_progress_hook(url):
+    def progress_hook(d):
+        status = d.get('status')
+        if active_downloads.get(url):
+            raise Exception("DownloadCancelledByUser")
+            
+        if status == 'downloading':
+            percent = d.get('_percent_str', '0.0%')
+            speed = d.get('_speed_str', 'N/A')
+            eta = d.get('_eta_str', 'N/A')
+            filename = d.get('filename', 'Unknown')
+            msg = {"type": "progress", "url": url, "filename": filename, "percent": percent, "speed": speed, "eta": eta}
+            asyncio.run(manager.broadcast(json.dumps(msg)))
+        elif status == 'finished':
+            msg = {"type": "finished", "url": url, "filename": d.get('filename', 'Unknown')}
+            asyncio.run(manager.broadcast(json.dumps(msg)))
+    return progress_hook
 
 @app.post("/settings/")
 async def update_settings(req: SettingsRequest):
     settings = load_settings()
     settings['preferred_download_directory'] = req.preferred_download_directory
     settings['download_profile'] = req.download_profile
+    settings['max_concurrent_downloads'] = req.max_concurrent_downloads
+    settings['network_reconnect_attempts'] = req.network_reconnect_attempts
     save_settings(settings)
     return {"status": "success"}
 
@@ -224,7 +232,6 @@ async def start_download(req: DownloadRequest):
         'outtmpl': os.path.join(abs_dir, '%(uploader|UnknownChannel)s', '%(upload_date|UnknownDate)s', '%(title).200s.%(ext)s'),
         'merge_output_format': 'mkv' if is_video else None,
         'postprocessors': postprocessors,
-        'progress_hooks': [progress_hook],
         'http_chunk_size': 10485760,
         'concurrent_fragment_downloads': qos_threads,
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
@@ -234,37 +241,62 @@ async def start_download(req: DownloadRequest):
     
     def run_ytdlp(url):
         active_downloads[url] = False
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        
+        # Make a copy of ydl_opts to attach the specific hook
+        url_ydl_opts = ydl_opts.copy()
+        url_ydl_opts['progress_hooks'] = [get_progress_hook(url)]
+
+        settings = load_settings()
+        max_retries = settings.get("network_reconnect_attempts", 3)
+        for attempt in range(max_retries):
             try:
-                # Pre-fetch to get original title
-                info = ydl.extract_info(url, download=False)
-                title = info.get('title', 'Unknown')
-                sanitized_title = sanitize_filename(title)
-                ydl.params['outtmpl'] = {'default': os.path.join(abs_dir, f"{sanitized_title}.%(ext)s")}
-                
-                hist = load_history()
-                hist.insert(0, {"title": title, "url": url, "timestamp": time.time(), "status": "Started"})
-                save_history(hist[:50]) # keep last 50
-                
-                ydl.download([url])
-                
-                hist = load_history()
-                for h in hist:
-                    if h["url"] == url and h["timestamp"] > time.time() - 86400:
-                        h["status"] = "Completed"
-                save_history(hist)
+                if active_downloads.get(url):
+                    break
+                with yt_dlp.YoutubeDL(url_ydl_opts) as ydl:
+                    # Pre-fetch to get original title
+                    info = ydl.extract_info(url, download=False)
+                    title = info.get('title', 'Unknown')
+                    sanitized_title = sanitize_filename(title)
+                    ydl.params['outtmpl'] = {'default': os.path.join(abs_dir, f"{sanitized_title}.%(ext)s")}
+                    
+                    hist = load_history()
+                    hist.insert(0, {"title": title, "url": url, "timestamp": time.time(), "status": "Started"})
+                    save_history(hist[:50]) # keep last 50
+                    
+                    ydl.download([url])
+                    
+                    hist = load_history()
+                    for h in hist:
+                        if h["url"] == url and h["timestamp"] > time.time() - 86400:
+                            h["status"] = "Completed"
+                    save_history(hist)
+                    break # Success, break out of retry loop
             except Exception as e:
-                hist = load_history()
-                for h in hist:
-                    if h["url"] == url and h["timestamp"] > time.time() - 86400:
-                        h["status"] = f"Failed/Cancelled: {str(e)}"
-                save_history(hist)
-                if str(e) != "DownloadCancelledByUser":
-                    msg = {"type": "error", "message": str(e), "url": url}
+                err_msg = str(e)
+                if "DownloadCancelledByUser" in err_msg:
+                    hist = load_history()
+                    for h in hist:
+                        if h["url"] == url and h["timestamp"] > time.time() - 86400:
+                            h["status"] = f"Failed/Cancelled: {err_msg}"
+                    save_history(hist)
+                    break # Do not retry on cancel
+                
+                if attempt < max_retries - 1:
+                    time.sleep(2) # Wait before retry
+                    msg = {"type": "error", "message": f"Network issue/timeout. Retrying ({attempt+1}/{max_retries})...", "url": url}
                     asyncio.run(manager.broadcast(json.dumps(msg)))
-            finally:
-                if url in active_downloads:
-                    del active_downloads[url]
+                    continue
+                else:
+                    hist = load_history()
+                    for h in hist:
+                        if h["url"] == url and h["timestamp"] > time.time() - 86400:
+                            h["status"] = f"Failed after {max_retries} retries: {err_msg}"
+                    save_history(hist)
+                    msg = {"type": "error", "message": err_msg, "url": url}
+                    asyncio.run(manager.broadcast(json.dumps(msg)))
+        
+        if url in active_downloads:
+            del active_downloads[url]
 
     for url in req.urls:
         asyncio.get_event_loop().run_in_executor(None, run_ytdlp, url)

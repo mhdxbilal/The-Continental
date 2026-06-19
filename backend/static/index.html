@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>The Continental - Downloader</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         body { background-color: #000000; color: #ffffff; }
         .glass { background: rgba(18, 18, 18, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
@@ -22,50 +23,35 @@
     <div class="glass p-8 rounded-2xl shadow-2xl w-full max-w-lg">
         <div class="flex justify-between items-center mb-6">
             <h1 class="text-3xl font-bold text-gray-100">Universal Downloader</h1>
-            <button onclick="toggleTheme()" class="text-xs text-gray-400 hover:text-white transition-colors border border-gray-700 px-2 py-1 rounded">
-                Toggle Contrast
-            </button>
+            <div class="flex gap-2">
+                <button onclick="openSettings()" class="text-xs text-gray-400 hover:text-white transition-colors border border-gray-700 px-2 py-1 rounded">
+                    Settings
+                </button>
+                <button onclick="toggleTheme()" class="text-xs text-gray-400 hover:text-white transition-colors border border-gray-700 px-2 py-1 rounded">
+                    Toggle Contrast
+                </button>
+            </div>
         </div>
         
         <div class="mb-4">
             <label class="block text-gray-400 text-sm mb-2">Download Directory</label>
-            <input type="text" id="dirInput" placeholder="/app/downloads" class="w-full bg-[#121212] border border-gray-700 text-white rounded-lg p-3 outline-none focus:border-blue-500 transition-colors">
+            <input type="text" id="dirInput" placeholder="/storage/emulated/0/Download" class="w-full bg-[#121212] border border-gray-700 text-white rounded-lg p-3 outline-none focus:border-blue-500 transition-colors">
         </div>
 
         <div class="flex flex-col gap-4">
             <textarea id="urlInput" rows="3" placeholder="Enter URLs (one per line)..." class="w-full bg-[#121212] border border-gray-700 text-white rounded-lg p-3 outline-none focus:border-blue-500 transition-colors resize-none"></textarea>
-            
-            <button onclick="fetchFormats()" id="btnFetch" class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
-                Fetch Formats (1st URL)
-            </button>
 
             <select id="formatInput" class="w-full bg-[#121212] border border-gray-700 text-white rounded-lg p-3 outline-none focus:border-blue-500 transition-colors">
                 <option value="bestvideo+bestaudio/best">Best Quality (Default)</option>
                 <option value="bestaudio/best">Audio Only</option>
             </select>
             
-            <button onclick="startDownload()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors shadow-lg shadow-blue-500/30 mt-2">
+            <button onclick="startDownload()" id="btnDownload" class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg transition-colors shadow-lg shadow-blue-500/30 mt-2" disabled>
                 Initiate Sequence
             </button>
         </div>
         
-        <div id="progressContainer" class="mt-8 hidden">
-            <div class="flex justify-between items-center mb-2">
-                <div class="flex justify-between text-sm text-gray-400 w-full min-w-0 pr-4">
-                    <span id="filename" class="truncate max-w-[60%]">Preparing...</span>
-                    <span id="percent">0%</span>
-                </div>
-                <button onclick="cancelActiveDownload()" id="btnCancel" class="bg-red-600 hover:bg-red-700 text-white text-xs py-1 px-3 rounded whitespace-nowrap transition-colors">
-                    Cancel
-                </button>
-            </div>
-            <div class="w-full bg-gray-800 rounded-full h-2 mb-2">
-                <div id="progressBar" class="bg-blue-500 h-2 rounded-full transition-all duration-300 ease-out" style="width: 0%"></div>
-            </div>
-            <div class="flex justify-between text-xs text-gray-500 mt-2">
-                <span id="speed">0 MB/s</span>
-                <span id="eta">ETA: -</span>
-            </div>
+        <div id="progressContainer" class="mt-8 hidden space-y-4">
         </div>
         <div id="historyContainer" class="mt-8 border-t border-gray-800 pt-6">
             <div class="flex justify-between items-center mb-4">
@@ -80,42 +66,201 @@
         </div>
     </div>
 
+    <!-- Settings Overlay -->
+    <div id="settingsModal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+        <div class="glass p-6 rounded-2xl w-full max-w-md">
+            <h2 class="text-2xl font-bold mb-4">Settings</h2>
+            
+            <div class="mb-4">
+                <label class="block text-gray-400 text-sm mb-1">Download Directory</label>
+                <input type="text" id="settingDir" class="w-full bg-[#121212] border border-gray-700 text-white rounded p-2">
+            </div>
+            <div class="mb-4">
+                <label class="block text-gray-400 text-sm mb-1">Default Quality</label>
+                <select id="settingQuality" class="w-full bg-[#121212] border border-gray-700 text-white rounded p-2">
+                    <option value="bestvideo+bestaudio/best">Best Combined</option>
+                    <option value="bestaudio/best">Audio Only</option>
+                </select>
+            </div>
+            <div class="mb-4">
+                <label class="block text-gray-400 text-sm mb-1">Concurrent Downloads</label>
+                <input type="number" id="settingConcurrent" min="1" max="10" class="w-full bg-[#121212] border border-gray-700 text-white rounded p-2">
+            </div>
+            <div class="mb-6">
+                <label class="block text-gray-400 text-sm mb-1">Network Reconnect Attempts</label>
+                <input type="number" id="settingRetries" min="0" max="10" class="w-full bg-[#121212] border border-gray-700 text-white rounded p-2">
+            </div>
+            
+            <div class="flex justify-end gap-2">
+                <button onclick="closeSettings()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded">Cancel</button>
+                <button onclick="saveSettings()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded">Save</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const ws = new WebSocket(`ws://${window.location.host}/ws`);
         const progressContainer = document.getElementById('progressContainer');
-        const progressBar = document.getElementById('progressBar');
-        const percentText = document.getElementById('percent');
-        const speedText = document.getElementById('speed');
-        const etaText = document.getElementById('eta');
-        const filenameText = document.getElementById('filename');
         const formatInput = document.getElementById('formatInput');
         const dirInput = document.getElementById('dirInput');
+        const urlInput = document.getElementById('urlInput');
+        const btnDownload = document.getElementById('btnDownload');
+        let autoFetchingFormats = false;
+
+        urlInput.addEventListener('input', () => {
+            const urls = urlInput.value.split('\n').map(u => u.trim()).filter(Boolean);
+            const isValid = urls.length > 0 && urls.every(u => /^https?:\/\//i.test(u));
+            btnDownload.disabled = !isValid;
+            
+            if (isValid && !autoFetchingFormats && urls.length > 0) {
+                // Determine if we need to auto-fetch
+                if (formatInput.options.length <= 2) {
+                    autoFetchingFormats = true;
+                    fetchFormats().finally(() => { autoFetchingFormats = false; });
+                }
+            }
+        });
+
+        function playAlertSound() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // High pitch note
+                gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                oscillator.start();
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+                oscillator.stop(audioCtx.currentTime + 0.3);
+            } catch(e) {}
+        }
+
+        const chartData = {};
+        const chartRefs = {};
+
+        function createProgressElement(url) {
+            const div = document.createElement('div');
+            div.className = "bg-gray-900 border border-gray-800 p-4 rounded-lg";
+            const safeUrlId = `dl-${btoa(url).replace(/=/g, '')}`;
+            div.id = safeUrlId;
+            div.innerHTML = `
+                <div class="flex justify-between items-center mb-2">
+                    <div class="flex justify-between text-sm text-gray-400 w-full min-w-0 pr-4">
+                        <span class="filename truncate max-w-[60%]">Preparing...</span>
+                        <span class="percent">0%</span>
+                    </div>
+                    <button onclick="cancelActiveDownload('${url}')" class="bg-red-600 hover:bg-red-700 text-white text-xs py-1 px-3 rounded whitespace-nowrap transition-colors">
+                        Cancel
+                    </button>
+                </div>
+                <div class="w-full bg-gray-800 rounded-full h-2 mb-2">
+                    <div class="progressBar bg-blue-500 h-2 rounded-full transition-all duration-300 ease-out" style="width: 0%"></div>
+                </div>
+                <div class="chart-container w-full h-12 mt-2 bg-[#0a0a0a] rounded overflow-hidden relative"></div>
+                <div class="flex justify-between text-xs text-gray-500 mt-2">
+                    <span class="speed">0 MB/s</span>
+                    <span class="eta">ETA: -</span>
+                </div>
+            `;
+            progressContainer.appendChild(div);
+
+            chartData[url] = [];
+            const container = div.querySelector('.chart-container');
+            const svg = d3.select(container).append("svg")
+                .attr("width", "100%")
+                .attr("height", "100%")
+                .attr("preserveAspectRatio", "none");
+            
+            const g = svg.append("g");
+            const path = g.append("path")
+                .attr("fill", "none")
+                .attr("stroke", "#3b82f6") // tailwind blue-500
+                .attr("stroke-width", 1.5);
+                
+            const areaLayer = g.append("path")
+                .attr("fill", "rgba(59, 130, 246, 0.2)");
+                
+            chartRefs[url] = { svg, path, areaLayer, container };
+
+            return div;
+        }
+
+        function updateChart(url, speedStr) {
+            if (!chartRefs[url]) return;
+            // Parse speed: " 4.50MiB/s" -> 4.5
+            let speedMatch = speedStr.match(/([\d\.]+)/);
+            let val = speedMatch ? parseFloat(speedMatch[1]) : 0;
+            if (speedStr.includes('KiB/s')) val = val / 1024;
+            else if (speedStr.includes('GiB/s')) val = val * 1024;
+            
+            chartData[url].push(val);
+            if (chartData[url].length > 50) {
+                chartData[url].shift();
+            }
+            
+            const data = chartData[url];
+            const { path, areaLayer, container } = chartRefs[url];
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            
+            const x = d3.scaleLinear().domain([0, 49]).range([0, width]);
+            const maxY = d3.max(data) || 1;
+            const y = d3.scaleLinear().domain([0, maxY]).range([height, 0]);
+            
+            const line = d3.line()
+                .x((d, i) => x(i + (50 - data.length)))
+                .y(d => y(d))
+                .curve(d3.curveMonotoneX);
+                
+            const area = d3.area()
+                .x((d, i) => x(i + (50 - data.length)))
+                .y0(height)
+                .y1(d => y(d))
+                .curve(d3.curveMonotoneX);
+                
+            path.attr("d", line(data));
+            areaLayer.attr("d", area(data));
+        }
 
         ws.onmessage = function(event) {
             const data = JSON.parse(event.data);
             progressContainer.classList.remove('hidden');
             
-            if (data.type === 'progress') {
-                filenameText.innerText = data.filename.split('/').pop() || data.filename;
-                percentText.innerText = data.percent;
-                speedText.innerText = data.speed;
-                etaText.innerText = `ETA: ${data.eta}`;
+            const safeUrlId = data.url ? `dl-${btoa(data.url).replace(/=/g, '')}` : null;
+            let el = safeUrlId ? document.getElementById(safeUrlId) : null;
+            
+            if (!el && data.type !== 'error' && data.url) {
+                el = createProgressElement(data.url);
+            }
+
+            if (data.type === 'progress' && el) {
+                el.querySelector('.filename').innerText = data.filename.split('/').pop() || data.filename;
+                el.querySelector('.percent').innerText = data.percent;
+                el.querySelector('.speed').innerText = data.speed;
+                el.querySelector('.eta').innerText = `ETA: ${data.eta}`;
                 
-                let percentStr = data.percent.replace(/\x1b\[.*?m/g, '').replace('%', '').trim();
-                let pct = parseFloat(percentStr);
-                if(!isNaN(pct)) {
-                    progressBar.style.width = `${pct}%`;
-                }
+                let pct = parseFloat(data.percent.replace(/\x1b\[.*?m/g, '').replace('%', '').trim());
+                if(!isNaN(pct)) el.querySelector('.progressBar').style.width = `${pct}%`;
+
+                updateChart(data.url, data.speed);
+
             } else if (data.type === 'finished') {
                 showToast(`Finished downloading: ${data.filename.split('/').pop()}`);
-                percentText.innerText = "100%";
-                progressBar.style.width = "100%";
-                speedText.innerText = "Done";
-                etaText.innerText = "";
-                setTimeout(fetchHistory, 1000); // refresh history a moment after finish
+                playAlertSound();
+                if (el) {
+                    el.querySelector('.percent').innerText = "100%";
+                    el.querySelector('.progressBar').style.width = "100%";
+                    el.querySelector('.speed').innerText = "Done";
+                    el.querySelector('.eta').innerText = "";
+                }
+                setTimeout(fetchHistory, 1000);
             } else if (data.type === 'error') {
                 showToast(`Error: ${data.message}`);
                 console.error(data.url, data.message);
+                if (el) el.remove();
                 setTimeout(fetchHistory, 1000);
             }
         };
@@ -136,6 +281,40 @@
         }
         applyTheme(localStorage.getItem('highContrast') === 'true');
         
+        function openSettings() {
+            document.getElementById('settingsModal').classList.remove('hidden');
+            fetch('/settings/')
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('settingDir').value = data.preferred_download_directory || '/storage/emulated/0/Download';
+                    document.getElementById('settingQuality').value = data.download_profile || 'bestvideo+bestaudio/best';
+                    document.getElementById('settingConcurrent').value = data.max_concurrent_downloads || 5;
+                    document.getElementById('settingRetries').value = data.network_reconnect_attempts || 3;
+                });
+        }
+        
+        function closeSettings() {
+            document.getElementById('settingsModal').classList.add('hidden');
+        }
+        
+        function saveSettings() {
+            const payload = {
+                preferred_download_directory: document.getElementById('settingDir').value,
+                download_profile: document.getElementById('settingQuality').value,
+                max_concurrent_downloads: parseInt(document.getElementById('settingConcurrent').value) || 5,
+                network_reconnect_attempts: parseInt(document.getElementById('settingRetries').value) || 3
+            };
+            fetch('/settings/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(() => {
+                dirInput.value = payload.preferred_download_directory;
+                closeSettings();
+                showToast("Settings saved.");
+            });
+        }
+        
         // Load settings on boot
         fetch('/settings/')
             .then(res => res.json())
@@ -150,7 +329,12 @@
             fetch('/settings/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ preferred_download_directory: dirInput.value })
+                body: JSON.stringify({ 
+                    preferred_download_directory: dirInput.value,
+                    download_profile: 'Always Best Quality',
+                    max_concurrent_downloads: 5,
+                    network_reconnect_attempts: 3
+                })
             });
         });
 
@@ -169,10 +353,6 @@
             const firstUrl = urlsStr.split('\n')[0].trim();
             if (!firstUrl) return;
             
-            const btn = document.getElementById('btnFetch');
-            btn.innerText = "Fetching...";
-            btn.disabled = true;
-            
             try {
                 const res = await fetch('/formats/', {
                     method: 'POST',
@@ -183,10 +363,11 @@
                 
                 if (data.formats) {
                     formatInput.innerHTML = '';
-                    data.formats.forEach(f => {
+                    data.formats.forEach((f, i) => {
                         const opt = document.createElement('option');
                         opt.value = f.format_id;
                         opt.innerText = f.label;
+                        if (i === 1) opt.selected = true; // Auto-highlight best specific resolution
                         formatInput.appendChild(opt);
                     });
                     showToast(`Formats fetched for: ${data.title}`);
@@ -197,9 +378,6 @@
                 console.error(e);
                 showToast("Error fetching formats.");
             }
-            
-            btn.innerText = "Fetch Formats (1st URL)";
-            btn.disabled = false;
         }
 
         let currentDownloadUrl = null;
@@ -230,13 +408,13 @@
             } catch (e) {}
         }
         
-        async function cancelActiveDownload() {
-            if (!currentDownloadUrl) return;
+        async function cancelActiveDownload(targetUrl) {
+            if (!targetUrl) return;
             try {
                 const res = await fetch('/cancel/', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: currentDownloadUrl })
+                    body: JSON.stringify({ url: targetUrl })
                 });
                 if (res.ok) {
                     showToast("Cancel signal sent.");
@@ -253,8 +431,6 @@
             
             const urls = urlsStr.split('\n').map(u => u.trim()).filter(u => u);
             if (urls.length === 0) return;
-            
-            currentDownloadUrl = urls[0]; // Tracking first for cancel demo
 
             try {
                 const res = await fetch('/download/', {
@@ -267,9 +443,8 @@
                     showToast("Download sequence initiated.");
                     // Reset UI
                     document.getElementById('urlInput').value = '';
-                    progressContainer.classList.add('hidden');
-                    progressBar.style.width = '0%';
-                    percentText.innerText = '0%';
+                    btnDownload.disabled = true;
+                    // Keep progressContainer intact to show active downloads
                     fetchHistory();
                 } else {
                     showToast("Failed to start download.");
